@@ -1,7 +1,7 @@
 #include<NewPing.h>  //https://bitbucket.org/teckel12/arduino-new-ping/wiki/Home
 #include<Servo.h>    // standard library for servo motor
 
-// you can instead of using all void() use this enum for directions and how the motor works for more effiency and clean overview
+// You can instead of using all void() use this enum for directions and how the motor works for more effiency and clean overview
 enum Direction { STOP, FORWARD, LEFT, RIGHT };
 Direction currentDirection = STOP;
 
