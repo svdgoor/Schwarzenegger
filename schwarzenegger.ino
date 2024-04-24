@@ -9,9 +9,27 @@ Direction currentDirection = STOP;
 const int Lmotor = 6;
 const int Rmotor = 7;
 
+
 // sensorpins for servo
 #define trig_pin A1
 #define echo_pin A2
+
+//LED and buzzer 
+const int buzzer = 9;
+const int LEDorange = 2;
+const int LEDred = 3;
+const int LED green = 4;
+
+//triple touch thing 
+int touchCount = 0;
+bool wasTouched = false;
+unsigned long lastTouchTime = 0;
+const unsigned long doubleTapWindow = 500; // user has 600ms to triple touch
+
+//touchsensor
+const int touchSensor = 5
+
+
 
 // starting values for the system 
 int max_distance = 200;
@@ -65,6 +83,15 @@ void setup() {
   delay(100);
   distance = readPing();
   delay(100);
+
+  //touchsensor : 
+  pinMode(touchSensor, INPUT);
+  //LED buzzer 
+  pinMode(buzzer, OUTPUT); 
+  pinMode(LEDorange, OUTPUT);
+  pinMode(LEDred, OUTPUT);
+  pinMode(LEDgreen, OUTPUT);
+
 }
 //
 //void loop() {
@@ -152,17 +179,38 @@ void loop() {
       /// STATE SWITCH ///
       // if no heat signature detected for X time -> Idle
       // if three separate taps on the button -> Friendly
+      bool isTouched = digitalRead(touchSensor) == HIGH; 
+      if (isTouched && !wasTouched) {
+        if (millis() - lastTouchTime <= doubleTapWindow) { //verify if the last touch was made in a short enough time to be consider as "succesive" touch
+          touchCount++; 
+          if (touchCount == 3) { //if 3 succesive touch then turn on the led 
+            currentState = FRIENDLY;
+          }
+        } else {
+          touchCount = 1; //one bc the first touch is still taken into account
+        }
+        wasTouched = true;
+
+        lastTouchTime = millis(); //update the touch time
+      } else if (!isTouched && wasTouched) {
+        wasTouched = false; //put back wastouch to 0 if the sensor is not activated anymore
+      }
+
+      if (touchCount != 3) { //turning off led if no triple touch 
+        currentState = HOSTILE;
+      }
       break;
     }
     case FRIENDLY: { // Xavier + all the LEDs & Buzzers & Button in the idle mode
       /// ACTION ///
       updateRobotAppearance();
       // Robot stays in place
-
+      moveStop();
       /// STATE SWITCH ///
       // if button is pressed again and then 10 seconds pass -> Idle
       if (buttonPressed()) {
-        // do things
+        delay(10000);
+        currentState = IDLE_;
       }
       break;
     }
@@ -171,8 +219,12 @@ void loop() {
 }
 
 // Xavier
-bool buttonPressed() {
-  return false;
+bool touchSensorPressed() {
+  if (touchSensor == HIGH) {
+    return true; 
+  } else {
+    return false; // 
+  }
 }
 
 // Xavier
@@ -180,18 +232,46 @@ void updateRobotAppearance() {
   switch (currentState) {
     case IDLE_: {
       // TODO set LED colors to OFF
+      digitalWrite(LEDorange, LOW);
+      digitalWrite(LEDred, LOW);
+      digitalWrite(LEDgreen, LOW);
       // TODO set Buzzer to OFF
+      digitalWrite(buzzer, LOW);
       break;
     }
-      // Invetigating
+    case Invetigating {
       // TODO set LED colors to Orange
-      // TODO set Buzzer to off or low (test both see what's nice)
-      // Hostile
+      digitalWrite(LEDorange, HIGH);
+      digitalWrite(LEDred, LOW);
+      digitalWrite(LEDgreen, LOW);
+      // TODO set Buzzer to off or low (test both see what's nice) -> did "beeping" bc it sounds nicer imo 
+      tone(buzzer, 50 ); // Send 0.05KHz sound signal
+      delay(1000);         // for 1 sec
+      noTone(buzzer);     // Stop sound
+      delay(1000); 
+      }
+    case Hostile {
       // TODO set LED to red
+      digitalWrite(LEDorange, LOW);
+      digitalWrite(LEDred, HIGH);
+      digitalWrite(LEDgreen, LOW);
       // TODO set Buzzer to "terminator"
-      // Friendly
+      tone(buzzer, 3000 ); 
+      delay(1000);         
+      noTone(buzzer);     
+      delay(1000); 
+      }
+    case Friendly {
       // TODO set LED to Green
+      digitalWrite(LEDorange, LOW);
+      digitalWrite(LEDred, LOW);
+      digitalWrite(LEDgreen, HIGH);
       // TODO set Buzzer to "Happy" somehow? Otherwise off
+      tone(buzzer, 300 ); 
+      delay(900);         
+      noTone(buzzer);     
+      delay(10); 
+      }
   }
   // Use value of "currentState" in another switch
   return;
