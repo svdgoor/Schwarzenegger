@@ -22,13 +22,14 @@ const unsigned long doubleTapWindow = 500; // user has 600ms to triple touch
 // Sonar & Servo
 #define trig_pin A1
 #define echo_pin A2
-int sonarMaxDistance = 250;
+const int sonarMaxDistance = 250;
+const float distanceChangeThreshold = 0.4; // TODO test
+const int servoTotalAngle = 180;
 NewPing sonar = NewPing(trig_pin, echo_pin, sonarMaxDistance); // sensor function
-float distanceChangeThreshold = 0.4; // TODO test
 Servo servo = Servo();
 int servoDirection = 0;
 bool servoTurnsRight = true;
-int servoTotalAngle = 180;
+int sonarDistances[servoTotalAngle];
 
 // Starting value for movement system
 bool goesForward = false;
@@ -217,9 +218,15 @@ bool touchSensorPressed() {
 }
 
 // Sjoerd
-// Scans in all 360 degree distances and checks if there is a change in distance significant enough
+// Scans in all 360 degree distances and returns true if there is a change in distance significant enough
 bool updateAndTestSonar(int dir, int cm, float distanceChangeRequired) {
-  return true;
+  int previousCm = sonarDistances[dir];
+  sonarDistances[dir] = cm;
+  if (previousCm = 0) { // first measurement
+    return false;
+  }
+  // the distance difference is more than the distance change requirement
+  return abs(cm - previousCm) > distanceChangeRequired * max(cm, previousCm);
 }
 
 // Sjoerd
