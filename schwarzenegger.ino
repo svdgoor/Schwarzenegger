@@ -1,6 +1,9 @@
 #include<NewPing.h>  //https://bitbucket.org/teckel12/arduino-new-ping/wiki/Home
 #include<Servo.h>    // standard library for servo motor
 
+int irPin = A0; // Analog input pin that the sensor is attached to
+int irValue = 0; // Variable to store the value coming from the sensor
+
 // You can instead of using all void() use this enum for directions and how the motor works for more effiency and clean overview
 enum Direction { STOP, FORWARD, LEFT, RIGHT };
 Direction currentDirection = STOP;
@@ -70,6 +73,10 @@ State currentState = IDLE_;
 void setup() {
   pinMode(Lmotor, OUTPUT); //pin 6
   pinMode(Rmotor, OUTPUT); //pin 7
+
+  // infrared
+  Serial.begin(9600); // Initialize serial communication at 9600 bits per second:
+  pinMode(irPin, INPUT); // Set the sensor pin as an input
 
   servo1.attach(9); // the servo pin
 
@@ -168,13 +175,18 @@ void loop() {
       /// ACTION ///
       updateRobotAppearance();
       // TODO Chasing -> then maintain distance to avoid getting smacked. Avoid obstacles where possible
-//      if (distance < 20) {  // so while still checking if there are no obstacles
-//        currentDirection = STOP; // if there are we stop
-//      } else if (IRValue > threshold) { // then we check for the treshold again
-//        moveTowardsTarget(IRValue); // 
-//      } else {
-//        currentState = IDLE_;  // when we cannot find the target anymore
-//      }
+    
+      irValue = analogRead(irPin); // Read the value from the IR sensor
+      delay(200); 
+      
+     if (distance < 20) {  // so while still checking if there are no obstacles
+       currentDirection = STOP; // if there are we stop
+       // dont know the range of the irValues so we cannot set a threshold yet?
+     } else if (irValue > threshold) { // then we check for the treshold again
+       moveTowardsTarget(IRValue); // using the code we can move toward a certain angle but dont know if the robot can this yet?
+     } else {
+       currentState = IDLE_;  // when we cannot find the target anymore
+     }
       
       /// STATE SWITCH ///
       // if no heat signature detected for X time -> Idle
