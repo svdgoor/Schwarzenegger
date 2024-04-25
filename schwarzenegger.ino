@@ -1,6 +1,6 @@
-#include<NewPing.h>  // Sketch -> Include Library > Add .ZIP Library > Select the NewPing_vX.X.X.zip file in the repository folder. Otherwise, use: https://bitbucket.org/teckel12/arduino-new-ping/wiki/Home
+//#include<NewPing.h>  // Sketch -> Include Library > Add .ZIP Library > Select the NewPing_vX.X.X.zip file in the repository folder. Otherwise, use: https://bitbucket.org/teckel12/arduino-new-ping/wiki/Home
 #include<Servo.h>    // standard library for servo motor
-
+#include<HCSR04.h>
 
 // Motor control
 const int Lmotor = 6;
@@ -20,16 +20,18 @@ unsigned long lastTouchTime = 0;
 const unsigned long doubleTapWindow = 500; // user has 600ms to triple touch
 
 // Sonar & Servo
+#define debug false
+#define servo_power 2
 #define trig_pin A1
 #define echo_pin A2
 const int sonarMaxDistance = 250;
 const float distanceChangeThreshold = 0.4; // TODO test
 const int servoTotalAngle = 180;
-NewPing sonar = NewPing(trig_pin, echo_pin, sonarMaxDistance); // sensor function
+HCSR04 sonar = HCSR04(trig_pin, echo_pin); // sensor function
 Servo servo = Servo();
 int servoDirection = 0;
 bool servoTurnsRight = true;
-int sonarDistances[servoTotalAngle];
+float sonarDistances[servoTotalAngle];
 
 // Starting value for movement system
 bool goesForward = false;
@@ -38,23 +40,24 @@ Direction currentDirection = STOP;
 
 // Robot state
 enum State {IDLE_, INVESTIGATING, HOSTILE, FRIENDLY};
-State currentState = IDLE_;
+int currentState = IDLE_;
 
 void setup() {
+  Serial.begin(9600);
+  
   pinMode(Lmotor, OUTPUT); //pin 6
   pinMode(Rmotor, OUTPUT); //pin 7
 
   servo.attach(9); // the servo pin
 
-  setServo(115); //set servomotor in forward position
-  delay(2000);
+  setServo(0); //set servomotor in forward position
 
   // now we calibrate the sensor to get the distance
-  sonar.ping_cm();
+  sonar.dist();
   delay(100);
-  sonar.ping_cm();
+  sonar.dist();
   delay(100);
-  sonar.ping_cm();
+  sonar.dist();
   delay(100);
 
   //touchsensor : 
@@ -65,6 +68,18 @@ void setup() {
   pinMode(LEDred, OUTPUT);
   pinMode(LEDgreen, OUTPUT);
 
+  pinMode(servo_power, OUTPUT);
+  digitalWrite(servo_power, HIGH);
+
+  Serial.println("Setup complete");
+  Serial.print("States | IDLE_: ");
+  Serial.print(IDLE_);
+  Serial.print(" | INVESTIGATING: ");
+  Serial.print(INVESTIGATING);
+  Serial.print(" | HOSTILE: ");
+  Serial.print(HOSTILE);
+  Serial.print(" | FRIENDLY: ");
+  Serial.println(FRIENDLY);
 }
 
 // and the in the void loop you can change state based on button pressed or timer runs out, like example
@@ -93,14 +108,31 @@ void loop() {
         newDirection = newDirection - 1;
       }
 
-      if (newDirection == 0 || newDirection == servoTotalAngle) { // Switch direction
+      if (newDirection < 0 || newDirection >= servoTotalAngle) { // Switch direction
         servoTurnsRight = !servoTurnsRight;
+        break;
       }
 
       setServo(newDirection); // Set direction & wait; this updates servoDirection
-      delay(10);
+      delay(50);
 
-      if (updateAndTestSonar(servoDirection, sonar.ping_cm(), distanceChangeThreshold)) { // Ping sonar and update
+      float cDist = sonar.dist();
+
+      if (debug) {
+        Serial.print("Distance at ");
+        Serial.print(newDirection);
+        Serial.print(" = ");
+        Serial.println(cDist);
+        Serial.print("Distances now: [");
+        for (int i = 0; i < servoTotalAngle - 1; i++) {
+          Serial.print(sonarDistances[i]);
+          Serial.print(", ");
+        }
+        Serial.print(sonarDistances[servoTotalAngle]);
+        Serial.println("]");
+      }
+
+      if (updateAndTestSonar(servoDirection, cDist, distanceChangeThreshold)) { // Ping sonar and update
         updateRobotState(INVESTIGATING);
       }
       break;
@@ -222,7 +254,7 @@ bool touchSensorPressed() {
 bool updateAndTestSonar(int dir, int cm, float distanceChangeRequired) {
   int previousCm = sonarDistances[dir];
   sonarDistances[dir] = cm;
-  if (previousCm = 0) { // first measurement
+  if (previousCm == 0.0) { // first measurement
     return false;
   }
   // the distance difference is more than the distance change requirement
@@ -231,6 +263,10 @@ bool updateAndTestSonar(int dir, int cm, float distanceChangeRequired) {
 
 // Sjoerd
 void updateRobotState(int state) {
+  Serial.print("State switched from ");
+  Serial.print(currentState);
+  Serial.print(" to ");
+  Serial.println(state);
   currentState = state;
   updateRobotAppearance(state);
   return;
