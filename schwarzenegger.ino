@@ -19,18 +19,22 @@ unsigned long lastTouchTime = 0;
 const unsigned long doubleTapWindow = 500; // user has 600ms to triple touch
 
 // Sonar & Servo
-#define debug false
+#define debug true
 #define servo_power 2
+#define servo_pin 3
 #define trig_pin A1
 #define echo_pin A2
 const int sonarMaxDistance = 250;
 const float distanceChangeThreshold = 0.4; // TODO test
 const int servoTotalAngle = 180;
+const int servoDirections = 20; // make sure servoTotalAngle/servoDirections is a whole number
+const int servoAngleStepSize = servoTotalAngle / servoDirections;
+const bool servoSwivel = true; // if false, rotates
+int servoDirectionNumber = 0;
 HCSR04 sonar = HCSR04(trig_pin, echo_pin); // sensor function
 Servo servo = Servo();
-int servoDirection = 0;
 bool servoTurnsRight = true;
-float sonarDistances[servoTotalAngle];
+int sonarDistances[servoDirections];
 
 // Starting value for movement system
 bool goesForward = false;
@@ -47,7 +51,7 @@ void setup() {
   pinMode(Lmotor, OUTPUT); //pin 6
   pinMode(Rmotor, OUTPUT); //pin 7
 
-  servo.attach(9); // the servo pin
+  servo.attach(servo_pin); // the servo pin
 
   setServo(0); //set servomotor in forward position
 
@@ -100,38 +104,46 @@ void loop() {
       }
 
       // Distance to a certain direction changes significicantly -> Investigating
-      int newDirection = servoDirection; // Calculate new direction
+      int newServoDirectionNumber; // Calculate new direction
       if (servoTurnsRight) {
-        newDirection = newDirection + 1;
+        newServoDirectionNumber = servoDirectionNumber + 1;
       } else {
-        newDirection = newDirection - 1;
+        newServoDirectionNumber = servoDirectionNumber - 1;
       }
 
-      if (newDirection < 0 || newDirection >= servoTotalAngle) { // Switch direction
-        servoTurnsRight = !servoTurnsRight;
-        break;
+      if (servoSwivel) {
+        if (newServoDirectionNumber < 0 || newServoDirectionNumber >= servoDirections) { // Switch direction
+          servoTurnsRight = !servoTurnsRight;
+          break;
+        }
+      } else { // rotate fully
+        if (newServoDirectionNumber < 0) {
+          newServoDirectionNumber = servoDirections - 1;
+        } else if (newServoDirectionNumber >= servoDirections) {
+          newServoDirectionNumber = 0;
+        }
       }
 
-      setServo(newDirection); // Set direction & wait; this updates servoDirection
+      setServo(newServoDirectionNumber * servoAngleStepSize); // Set direction & wait; this updates servoDirection
       delay(50);
 
       float cDist = sonar.dist();
 
       if (debug) {
         Serial.print("Distance at ");
-        Serial.print(newDirection);
+        Serial.print(newServoDirectionNumber * servoAngleStepSize);
         Serial.print(" = ");
         Serial.println(cDist);
         Serial.print("Distances now: [");
-        for (int i = 0; i < servoTotalAngle - 1; i++) {
+        for (int i = 0; i < servoDirections - 1; i++) {
           Serial.print(sonarDistances[i]);
           Serial.print(", ");
         }
-        Serial.print(sonarDistances[servoTotalAngle]);
+        Serial.print(sonarDistances[servoDirections - 1]);
         Serial.println("]");
       }
 
-      if (updateAndTestSonar(servoDirection, cDist, distanceChangeThreshold)) { // Ping sonar and update
+      if (updateAndTestSonar(newServoDirectionNumber, cDist, distanceChangeThreshold)) { // Ping sonar and update
         updateRobotState(INVESTIGATING);
       }
       break;
@@ -235,7 +247,7 @@ void updateMovement(Direction dir) {
 
 // Sjoerd
 void setServo(int direction) {
-  servoDirection = direction;
+  servoDirectionNumber = round(direction / servoAngleStepSize);
   servo.write(direction);
 }
 
@@ -250,10 +262,10 @@ bool touchSensorPressed() {
 
 // Sjoerd
 // Scans in all 360 degree distances and returns true if there is a change in distance significant enough
-bool updateAndTestSonar(int dir, int cm, float distanceChangeRequired) {
-  int previousCm = sonarDistances[dir];
-  sonarDistances[dir] = cm;
-  if (previousCm == 0.0) { // first measurement
+bool updateAndTestSonar(int dirIndex, int cm, float distanceChangeRequired) {
+  int previousCm = sonarDistances[dirIndex];
+  sonarDistances[dirIndex] = round(cm);
+  if (previousCm == 0) { // first measurement
     return false;
   }
   // the distance difference is more than the distance change requirement
