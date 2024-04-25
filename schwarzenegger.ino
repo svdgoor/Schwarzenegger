@@ -1,6 +1,5 @@
-//#include<NewPing.h>  // Sketch -> Include Library > Add .ZIP Library > Select the NewPing_vX.X.X.zip file in the repository folder. Otherwise, use: https://bitbucket.org/teckel12/arduino-new-ping/wiki/Home
 #include<Servo.h>    // standard library for servo motor
-#include<HCSR04.h>
+#include<HCSR04.h> // Sketch -> Include Library > Add .ZIP Library > Select the HCSR04_vX.X.X.zip file in the repository folder.
 
 // Motor control
 const int Lmotor = 6;
