@@ -1,6 +1,13 @@
 #include<Servo.h>    // standard library for servo motor
 #include<HCSR04.h> // Sketch -> Include Library > Add .ZIP Library > Select the HCSR04_vX.X.X.zip file in the repository folder.
 
+int irPin = A0; // Analog input pin that the sensor is attached to
+int irValue = 0; // Variable to store the value coming from the sensor
+
+// You can instead of using all void() use this enum for directions and how the motor works for more effiency and clean overview
+enum Direction { STOP, FORWARD, LEFT, RIGHT };
+Direction currentDirection = STOP;
+
 // Motor control
 const int Lmotor = 6;
 const int Rmotor = 7;
@@ -51,6 +58,9 @@ void setup() {
   
   pinMode(Lmotor, OUTPUT); //pin 6
   pinMode(Rmotor, OUTPUT); //pin 7
+
+  // infrared
+  pinMode(irPin, INPUT); // Set the sensor pin as an input
 
   servo.attach(servo_pin); // the servo pin
 
@@ -173,13 +183,18 @@ void loop() {
     case HOSTILE: { // Tom & Jen
       /// ACTION ///
       // TODO Chasing -> then maintain distance to avoid getting smacked. Avoid obstacles where possible
-//      if (distance < 20) {  // so while still checking if there are no obstacles
-//        currentDirection = STOP; // if there are we stop
-//      } else if (IRValue > threshold) { // then we check for the treshold again
-//        moveTowardsTarget(IRValue); // 
-//      } else {
-//        currentState = IDLE_;  // when we cannot find the target anymore
-//      }
+    
+      irValue = analogRead(irPin); // Read the value from the IR sensor
+      delay(200); 
+      
+     if (distance < 20) {  // so while still checking if there are no obstacles
+       currentDirection = STOP; // if there are we stop
+       // dont know the range of the irValues so we cannot set a threshold yet?
+     } else if (irValue > threshold) { // then we check for the treshold again
+       moveTowardsTarget(IRValue); // using the code we can move toward a certain angle but dont know if the robot can this yet?
+     } else {
+       currentState = IDLE_;  // when we cannot find the target anymore
+     }
       
       /// STATE SWITCH ///
       // if no heat signature detected for X time -> Idle
