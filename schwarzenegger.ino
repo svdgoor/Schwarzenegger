@@ -28,6 +28,7 @@ const int sonarMaxDistance = 250;
 const float distanceChangeThreshold = 0.4; // TODO test
 const int servoTotalAngle = 180;
 const int servoDirections = 20; // make sure servoTotalAngle/servoDirections is a whole number
+const int servoChangeAngleDelay = 200;
 const int servoAngleStepSize = servoTotalAngle / servoDirections;
 const bool servoSwivel = true; // if false, rotates
 int servoDirectionNumber = 0;
@@ -125,7 +126,7 @@ void loop() {
       }
 
       setServo(newServoDirectionNumber * servoAngleStepSize); // Set direction & wait; this updates servoDirection
-      delay(50);
+      delay(servoChangeAngleDelay);
 
       float cDist = sonar.dist();
 
