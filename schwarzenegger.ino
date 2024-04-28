@@ -1,12 +1,17 @@
 #include<Servo.h>    // standard library for servo motor
 #include<HCSR04.h> // Sketch -> Include Library > Add .ZIP Library > Select the HCSR04_vX.X.X.zip file in the repository folder.
 
-int irPin = A0; // Analog input pin that the sensor is attached to
-int irValue = 0; // Variable to store the value coming from the sensor
+int IRPin = A0; // Analog input pin that the sensor is attached to
 
 // You can instead of using all void() use this enum for directions and how the motor works for more effiency and clean overview
+bool goesForward = false;
 enum Direction { STOP, FORWARD, LEFT, RIGHT };
 Direction currentDirection = STOP;
+const float IRValueMin = 0;
+const float IRValueMax = 60; // TODO define this
+const float IRThreshold = -1; // TODO define this
+const float ServoControlMin = 0; // TODO define this
+const float ServoControlMax = 1; // TODO define this
 
 // Motor control
 const int Lmotor = 6;
@@ -44,11 +49,6 @@ Servo servo = Servo();
 bool servoTurnsRight = true;
 int sonarDistances[servoDirections];
 
-// Starting value for movement system
-bool goesForward = false;
-enum Direction { STOP, FORWARD, LEFT, RIGHT };
-Direction currentDirection = STOP;
-
 // Robot state
 enum State {IDLE_, INVESTIGATING, HOSTILE, FRIENDLY};
 int currentState = IDLE_;
@@ -60,7 +60,7 @@ void setup() {
   pinMode(Rmotor, OUTPUT); //pin 7
 
   // infrared
-  pinMode(irPin, INPUT); // Set the sensor pin as an input
+  pinMode(IRPin, INPUT); // Set the sensor pin as an input
 
   servo.attach(servo_pin); // the servo pin
 
@@ -184,13 +184,14 @@ void loop() {
       /// ACTION ///
       // TODO Chasing -> then maintain distance to avoid getting smacked. Avoid obstacles where possible
     
-      irValue = analogRead(irPin); // Read the value from the IR sensor
+      int IRValue = analogRead(IRPin); // Read the value from the IR sensor
+      float distance = sonar.dist();
       delay(200); 
       
      if (distance < 20) {  // so while still checking if there are no obstacles
        currentDirection = STOP; // if there are we stop
        // dont know the range of the irValues so we cannot set a threshold yet?
-     } else if (irValue > threshold) { // then we check for the treshold again
+     } else if (IRValue > IRThreshold) { // then we check for the treshold again
        moveTowardsTarget(IRValue); // using the code we can move toward a certain angle but dont know if the robot can this yet?
      } else {
        currentState = IDLE_;  // when we cannot find the target anymore
@@ -378,11 +379,11 @@ void updateRobotAppearance(int state) {
 //  distance = readPing();
 //}
 //
-//void moveTowardsTarget(int IRValue) {
-//  // and the function would look a bit like with for a motor driver that uses servo control
-//  leftMotor.write(map(IRValue, IRValuemin, IRValemax, Servocontrolmin, Servocontrolmaz)); //map you can move the wheel in certain angles and degrees
-//  rightMotor.write(map(IRValue, IRValuemin, IRValemax, Servocontrolmin, Servocontrolmaz)) //based on the ir value perceived
-//}
+void moveTowardsTarget(int IRValue) {
+ // and the function would look a bit like with for a motor driver that uses servo control
+//  leftMotor.write(map(IRValue, IRValueMin, IRValueMax, ServoControlMin, ServoControlMax)); //map you can move the wheel in certain angles and degrees
+//  rightMotor.write(map(IRValue, IRValueMin, IRValueMax, ServoControlMin, ServoControlMax)) //based on the ir value perceived
+}
 //
 // int lookL(){
 //   setServo(170);
