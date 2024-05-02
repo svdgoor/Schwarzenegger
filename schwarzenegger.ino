@@ -16,6 +16,7 @@ const float ServoControlMax = 1; // TODO define this
 // Motor control
 const int Lmotor = 6;
 const int Rmotor = 7;
+const int msDelayPer360Turn = 500; // TODO: Test this
 
 // LED and Buzzer 
 const int buzzer = 9;
@@ -37,17 +38,21 @@ const unsigned long doubleTapWindow = 500; // user has 600ms to triple touch
 #define trig_pin A1
 #define echo_pin A2
 const int sonarMaxDistance = 250;
-const float distanceChangeThreshold = 0.4; // TODO test
-const int servoTotalAngle = 180;
-const int servoDirections = 20; // make sure servoTotalAngle/servoDirections is a whole number
-const int servoChangeAngleDelay = 200;
+const float distanceChangeThreshold = 0.4; // Based on testing, seems to be high enough to prevent accidental triggers with the innacuracy of the sensor
+const int servoTotalAngle = 180; // DO NOT CHANGE THIS IT WILL BREAK THE CHASING!
+const int servoDirections = 15; // make sure servoTotalAngle/servoDirections is a whole number, and that is an odd number
+const int servoDirectionMiddle = floor(servoDirections / 2);
 const int servoAngleStepSize = servoTotalAngle / servoDirections;
+const int servoChangeAngleDelay = 200;
 const bool servoSwivel = true; // if false, rotates
 int servoDirectionNumber = 0;
 HCSR04 sonar = HCSR04(trig_pin, echo_pin); // sensor function
 Servo servo = Servo();
 bool servoTurnsRight = true;
 int sonarDistances[servoDirections];
+int investigatingStartTime = 0;
+int msToAuthenticateWhenInvestigating = 5000; // TODO: Test this & probably lower it when running the demonstration
+int msUntilIdleWhenInvestigating = 20000; // TODO: Test this & probably lower it when running the demonstration
 
 // Robot state
 enum State {IDLE_, INVESTIGATING, HOSTILE, FRIENDLY};
@@ -156,28 +161,52 @@ void loop() {
 
       if (updateAndTestSonar(newServoDirectionNumber, cDist, distanceChangeThreshold)) { // Ping sonar and update
         updateRobotState(INVESTIGATING);
+        
+        // rotate robot towards found target
+        int turnSteps = servoDirectionNumber - servoDirectionMiddle;
+        int turnDistance = abs(turnSteps) * servoAngleStepSize;
+        if (turnSteps < 0) {
+          turnL();
+        } else if (turnSteps > 0) {
+          turnR();
+        }
+        delay(float(msDelayPer360Turn) / 360.0 * abs(turnSteps));
+        moveStop();
       }
       break;
     }
     case INVESTIGATING: {
       /// ACTION ///
-      // Salim
+      // Sjoerd
       // Drive in direction of potential intruder to pick up heat signature. Avoid obstacles where possible
+      moveForward();
 
       /// STATE SWITCH ///
-      // Salim
+      // Sjoerd
       // if heat signature detected (so there's a person) & they are not authenticated withing 5 seconds -> Hostile
-//      if (IRValue > threshold) {
-//        currentState = HOSTILE;
-//      }
+      int IRValue = analogRead(IRPin); // Read the value from the IR sensor
+      if (IRValue > IRThreshold) {
+        moveStop();
+        int start = millis();
+        while (millis() < start + msToAuthenticateWhenInvestigating) { // while current time is more than start time + 5000ms
+          if (touchSensorPressed()) {
+            updateRobotState(FRIENDLY);
+          }
+        }
+        // failed to authenticate -> Hostile
+        updateRobotState(HOSTILE);
+      }
       
       // If user authenticated -> Friendly
       if (touchSensorPressed()) {
         updateRobotState(FRIENDLY);
       }
       
-       // Salim
       // if nothing detected for 20 seconds, drive back to original location -> Idle. Avoid obstacles where possible
+      if (millis() > investigatingStartTime + msUntilIdleWhenInvestigating) {
+        moveStop();
+        updateRobotState(IDLE_);
+      }
       break;
     }
     case HOSTILE: { // Tom & Jen
@@ -188,14 +217,14 @@ void loop() {
       float distance = sonar.dist();
       delay(200); 
       
-     if (distance < 20) {  // so while still checking if there are no obstacles
-       currentDirection = STOP; // if there are we stop
-       // dont know the range of the irValues so we cannot set a threshold yet?
-     } else if (IRValue > IRThreshold) { // then we check for the treshold again
-       moveTowardsTarget(IRValue); // using the code we can move toward a certain angle but dont know if the robot can this yet?
-     } else {
-       currentState = IDLE_;  // when we cannot find the target anymore
-     }
+      if (distance < 20) {  // so while still checking if there are no obstacles
+        currentDirection = STOP; // if there are we stop
+        // dont know the range of the irValues so we cannot set a threshold yet?
+      } else if (IRValue > IRThreshold) { // then we check for the treshold again
+        moveTowardsTarget(IRValue); // using the code we can move toward a certain angle but dont know if the robot can this yet?
+      } else {
+        currentState = IDLE_;  // when we cannot find the target anymore
+      }
       
       /// STATE SWITCH ///
       // if no heat signature detected for X time -> Idle
