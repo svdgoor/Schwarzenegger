@@ -1,12 +1,8 @@
 #include<Servo.h>    // standard library for servo motor
 #include<HCSR04.h> // Sketch -> Include Library > Add .ZIP Library > Select the HCSR04_vX.X.X.zip file in the repository folder.
 
-int IRPin = A0; // Analog input pin that the sensor is attached to
-
-// You can instead of using all void() use this enum for directions and how the motor works for more effiency and clean overview
-bool goesForward = false;
-enum Direction { STOP, FORWARD, LEFT, RIGHT };
-Direction currentDirection = STOP;
+#define ir_right A2
+#define ir_left A3
 const float IRValueMin = 0;
 const float IRValueMax = 60; // TODO define this
 const float IRThreshold = -1; // TODO define this
@@ -14,36 +10,39 @@ const float ServoControlMin = 0; // TODO define this
 const float ServoControlMax = 1; // TODO define this
 
 // Motor control
-const int Lmotor = 6;
-const int Rmotor = 7;
+const int MOTOR1_PIN1 = 3;  // Connect this to one terminal of Motor1
+const int MOTOR1_PIN2 = 4;  // Connect this to the other terminal of Motor1
+const int MOTOR2_PIN1 = 5;  // Connect this to one terminal of Motor2
+const int MOTOR2_PIN2 = 6;  // Connect this to the other terminal of Motor2
 const int msDelayPer360Turn = 500; // TODO: Test this
 
 // LED and Buzzer 
-const int buzzer = 9;
-const int LEDorange = 2;
-const int LEDred = 3;
-const int LEDgreen = 4;
+const int buzzer = 10;
+const int LEDorange = 7;
+const int LEDred = 8;
+const int LEDgreen = 9;
 
 // Touch Sensor 
-const int touchSensor = 5;
+const int touchSensor = 11;
 int touchCount = 0;
 bool wasTouched = false;
 unsigned long lastTouchTime = 0;
-const unsigned long doubleTapWindow = 500; // user has 600ms to triple touch
+const unsigned long doubleTapWindow = 500; // user has x ms to triple touch
 
 // Sonar & Servo
 #define debug true
-#define servo_power 2
-#define servo_pin 3
+#define servo_pin 2
 #define trig_pin A1
-#define echo_pin A2
+#define echo_pin A0
 const int sonarMaxDistance = 250;
-const float distanceChangeThreshold = 0.4; // Based on testing, seems to be high enough to prevent accidental triggers with the innacuracy of the sensor
+const float distanceChangeThreshold = 0.7; // Based on testing, seems to be high enough to prevent accidental triggers with the innacuracy of the sensor
 const int servoTotalAngle = 180; // DO NOT CHANGE THIS IT WILL BREAK THE CHASING!
 const int servoDirections = 15; // make sure servoTotalAngle/servoDirections is a whole number, and that is an odd number
 const int servoDirectionMiddle = floor(servoDirections / 2);
 const int servoAngleStepSize = servoTotalAngle / servoDirections;
 const int servoChangeAngleDelay = 200;
+const int msToAuthenticateWhenInvestigating = 5000; // TODO: Test this & probably lower it when running the demonstration
+const int msUntilIdleWhenInvestigating = 20000; // TODO: Test this & probably lower it when running the demonstration
 const bool servoSwivel = true; // if false, rotates
 int servoDirectionNumber = 0;
 HCSR04 sonar = HCSR04(trig_pin, echo_pin); // sensor function
@@ -51,21 +50,28 @@ Servo servo = Servo();
 bool servoTurnsRight = true;
 int sonarDistances[servoDirections];
 int investigatingStartTime = 0;
-int msToAuthenticateWhenInvestigating = 5000; // TODO: Test this & probably lower it when running the demonstration
-int msUntilIdleWhenInvestigating = 20000; // TODO: Test this & probably lower it when running the demonstration
 
 // Robot state
 enum State {IDLE_, INVESTIGATING, HOSTILE, FRIENDLY};
 int currentState = IDLE_;
 
+void printlnWithState(String message) {
+  Serial.print(currentState);
+  Serial.print(" | ");
+  Serial.println(message);
+}
+
 void setup() {
   Serial.begin(9600);
   
-  pinMode(Lmotor, OUTPUT); //pin 6
-  pinMode(Rmotor, OUTPUT); //pin 7
+  pinMode(ir_right, INPUT);
+  pinMode(ir_left, INPUT);
 
-  // infrared
-  pinMode(IRPin, INPUT); // Set the sensor pin as an input
+  // Set motor control pins as outputs
+  pinMode(MOTOR1_PIN1, OUTPUT);
+  pinMode(MOTOR1_PIN2, OUTPUT);
+  pinMode(MOTOR2_PIN1, OUTPUT);
+  pinMode(MOTOR2_PIN2, OUTPUT);
 
   servo.attach(servo_pin); // the servo pin
 
@@ -86,9 +92,9 @@ void setup() {
   pinMode(LEDorange, OUTPUT);
   pinMode(LEDred, OUTPUT);
   pinMode(LEDgreen, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
 
-  pinMode(servo_power, OUTPUT);
-  digitalWrite(servo_power, HIGH);
+  updateRobotState(IDLE_);
 
   Serial.println("Setup complete");
   Serial.print("States | IDLE_: ");
@@ -99,7 +105,7 @@ void setup() {
   Serial.print(HOSTILE);
   Serial.print(" | FRIENDLY: ");
   Serial.println(FRIENDLY);
-}
+} 
 
 // and the in the void loop you can change state based on button pressed or timer runs out, like example
 // this is only an example since i dont know the intricate parts of the button press yet but
@@ -179,18 +185,24 @@ void loop() {
       /// ACTION ///
       // Sjoerd
       // Drive in direction of potential intruder to pick up heat signature. Avoid obstacles where possible
-      moveForward();
+      if (sonar.dist() > 20) {
+        moveForward();
+      } else {
+        moveStop();
+      }
 
       /// STATE SWITCH ///
       // Sjoerd
       // if heat signature detected (so there's a person) & they are not authenticated withing 5 seconds -> Hostile
-      int IRValue = analogRead(IRPin); // Read the value from the IR sensor
-      if (IRValue > IRThreshold) {
+      if (digitalRead(ir_right) == 1 || digitalRead(ir_left) == 1) {
+        Serial.println("Detected IR signature");
         moveStop();
         int start = millis();
-        while (millis() < start + msToAuthenticateWhenInvestigating) { // while current time is more than start time + 5000ms
+        while (millis() - start < msToAuthenticateWhenInvestigating) { // while current time is more than start time + 5000ms
+          Serial.println(millis() - start);
           if (touchSensorPressed()) {
             updateRobotState(FRIENDLY);
+            return;
           }
         }
         // failed to authenticate -> Hostile
@@ -212,18 +224,33 @@ void loop() {
     case HOSTILE: { // Tom & Jen
       /// ACTION ///
       // TODO Chasing -> then maintain distance to avoid getting smacked. Avoid obstacles where possible
-    
-      int IRValue = analogRead(IRPin); // Read the value from the IR sensor
-      float distance = sonar.dist();
-      delay(200); 
-      
-      if (distance < 20) {  // so while still checking if there are no obstacles
-        currentDirection = STOP; // if there are we stop
-        // dont know the range of the irValues so we cannot set a threshold yet?
-      } else if (IRValue > IRThreshold) { // then we check for the treshold again
-        moveTowardsTarget(IRValue); // using the code we can move toward a certain angle but dont know if the robot can this yet?
+      delay(50);
+      unsigned int distance = sonar.dist();
+      // Serial.print("distance");
+      // Serial.println(distance);
+      int Right_Value = digitalRead(ir_right);
+      int Left_Value = digitalRead(ir_left);
+      // Serial.print("RIGHT");
+      // Serial.println(Right_Value);
+      // Serial.print("LEFT");
+      // Serial.println(Left_Value);
+      String message = "Distance: ";
+      message = message + distance;
+      message = message + " RightIR: ";
+      message = message + Right_Value;
+      message = message + " LeftIR: ";
+      message = message + Left_Value;
+      printlnWithState(message);
+
+      // Check if object is detected within a certain distance and both sensors detect an object
+      if (Right_Value == 1 && Left_Value == 1 && distance >= 10 && distance <= 30) {
+        moveForward();
+      } else if (Right_Value == 0 && Left_Value == 1) {
+        turnR();
+      } else if (Right_Value == 1 && Left_Value == 0) {
+        turnL();
       } else {
-        currentState = IDLE_;  // when we cannot find the target anymore
+        moveStop();
       }
       
       /// STATE SWITCH ///
@@ -245,10 +272,6 @@ void loop() {
       } else if (!isTouched && wasTouched) {
         wasTouched = false; //put back wastouch to 0 if the sensor is not activated anymore
       }
-
-      if (touchCount != 3) { //tursive touch then turn on the led 
-        updateRobotState(HOSTILE);
-      }
       break;
     }
     case FRIENDLY: { // Xavier + all the LEDs & Buzzers & Button in the idle mode
@@ -259,36 +282,17 @@ void loop() {
       /// STATE SWITCH ///
       // if button is pressed again and then 10 seconds pass -> Idle
       if (touchSensorPressed()) {
-        delay(10000);
+        for (int i = 0; i < 5; i++) {
+          updateRobotAppearance(INVESTIGATING);
+          delay(1000);
+          updateRobotAppearance(IDLE_);
+          delay(1000);
+        }
         updateRobotState(IDLE_);
       }
       break;
     }
   }
-}
-
-// ?
-void updateMovement(Direction dir) {
-  switch (dir) {
-    case FORWARD:
-      digitalWrite(Lmotor, HIGH);
-      digitalWrite(Rmotor, HIGH);
-      break;
-    case LEFT:
-      digitalWrite(Lmotor, HIGH);
-      digitalWrite(Rmotor, LOW);
-      break;
-    case RIGHT:
-      digitalWrite(Lmotor, LOW);
-      digitalWrite(Rmotor, HIGH);
-      break;
-    case STOP:
-    default:
-      digitalWrite(Lmotor, LOW);
-      digitalWrite(Rmotor, LOW);
-      break;
-  }
-  currentDirection = dir;
 }
 
 // Sjoerd
@@ -299,7 +303,7 @@ void setServo(int direction) {
 
 // Xavier
 bool touchSensorPressed() {
-  if (touchSensor == HIGH) {
+  if (digitalRead(touchSensor) == HIGH) {
     return true; 
   } else {
     return false; // 
@@ -325,6 +329,14 @@ void updateRobotState(int state) {
   Serial.print(" to ");
   Serial.println(state);
   currentState = state;
+  if (state == INVESTIGATING) {
+    investigatingStartTime = millis();
+  }
+  if (state == IDLE_) {
+    for (int i = 0; i < servoDirections; i++) {
+      sonarDistances[i] = 0;
+    }
+  }
   updateRobotAppearance(state);
   return;
 }
@@ -337,6 +349,7 @@ void updateRobotAppearance(int state) {
       digitalWrite(LEDorange, LOW);
       digitalWrite(LEDred, LOW);
       digitalWrite(LEDgreen, LOW);
+      digitalWrite(LED_BUILTIN, HIGH);
       // Set buzzer to OFF
       digitalWrite(buzzer, LOW);
       break;
@@ -346,6 +359,7 @@ void updateRobotAppearance(int state) {
       digitalWrite(LEDorange, HIGH);
       digitalWrite(LEDred, LOW);
       digitalWrite(LEDgreen, LOW);
+      digitalWrite(LED_BUILTIN, LOW);
       // Set buzzer to "beeping" bc it sounds nice 
       tone(buzzer, 50); // Send 0.05KHz sound signal
       delay(1000);      // for 1 sec TODO fix that this blocks the robot's thought processes for a second
@@ -357,6 +371,7 @@ void updateRobotAppearance(int state) {
       digitalWrite(LEDorange, LOW);
       digitalWrite(LEDred, HIGH);
       digitalWrite(LEDgreen, LOW);
+      digitalWrite(LED_BUILTIN, LOW);
       // Set buzzer to "terminator"
       tone(buzzer, 3000);
       delay(1000);
@@ -368,6 +383,7 @@ void updateRobotAppearance(int state) {
       digitalWrite(LEDorange, LOW);
       digitalWrite(LEDred, LOW);
       digitalWrite(LEDgreen, HIGH);
+      digitalWrite(LED_BUILTIN, LOW);
       // Set Buzzer to "Happy"
       tone(buzzer, 300);
       delay(1000);
@@ -378,96 +394,30 @@ void updateRobotAppearance(int state) {
   return;
 }
 
-//
-//void loop() {
-//  int distanceR = 0;
-//  int distanceL = 0;
-//
-//  delay(50);
-//
-//  if (distance <= 20){  //so something gets too close
-//    moveStop();
-//    delay(300);
-//    distanceR = lookR();
-//    delay(300);
-//    distanceL = lookL();
-//    delay(300);
-//
-//    if (distance >= distanceL){ //if there is an obstacle on the left
-//      turnR();
-//      moveStop();
-//    }
-//    else{ //if the left is clear
-//      turnL();
-//      moveStop();
-//    }
-//  }
-//  else {
-//    moveForward();
-//  }
-//  distance = readPing();
-//}
-//
-void moveTowardsTarget(int IRValue) {
- // and the function would look a bit like with for a motor driver that uses servo control
-//  leftMotor.write(map(IRValue, IRValueMin, IRValueMax, ServoControlMin, ServoControlMax)); //map you can move the wheel in certain angles and degrees
-//  rightMotor.write(map(IRValue, IRValueMin, IRValueMax, ServoControlMin, ServoControlMax)) //based on the ir value perceived
-}
-//
-// int lookL(){
-//   setServo(170);
-//   delay(500);
-//   int distance = readPing();
-//   delay(100);
-//   setServo(115);
-//   return distance;
-// }
-//
-// int lookR(){
-//   setServo(50);
-//   delay(500);
-//   int distance = readPing();
-//   delay(100);
-//   setServo(115);
-//   return distance;
-// }
-//
-// int readPing(){
-//   delay(70);
-//   int cm = sonar.ping_cm();
-//   if (cm==0){
-//     cm = 250;
-//   }
-//   return cm;
-// }
-
 void moveStop(){
-  digitalWrite(Lmotor, LOW);
-  digitalWrite(Rmotor, LOW);
+  digitalWrite(MOTOR1_PIN1, LOW);
+  digitalWrite(MOTOR1_PIN2, LOW);
+  digitalWrite(MOTOR2_PIN1, LOW);
+  digitalWrite(MOTOR2_PIN2, LOW);
 }
 
 void moveForward(){
-  if(!goesForward){
-    goesForward = true;
-    digitalWrite(Lmotor, HIGH);
-    digitalWrite(Rmotor, HIGH);
-  }
+  digitalWrite(MOTOR1_PIN1, HIGH);
+  digitalWrite(MOTOR1_PIN2, LOW);
+  digitalWrite(MOTOR2_PIN1, HIGH);
+  digitalWrite(MOTOR2_PIN2, LOW);
 }
 
 void turnL(){
-  digitalWrite(Lmotor, HIGH);
-  digitalWrite(Rmotor, LOW);
-  delay(500);
-
-  digitalWrite(Lmotor, HIGH);
-  digitalWrite(Rmotor, HIGH);
+  digitalWrite(MOTOR1_PIN1, LOW);
+  digitalWrite(MOTOR1_PIN2, HIGH);
+  digitalWrite(MOTOR2_PIN1, HIGH);
+  digitalWrite(MOTOR2_PIN2, LOW);
 }
 
 void turnR(){
-  digitalWrite(Lmotor, LOW);
-  digitalWrite(Rmotor, HIGH);
-  delay(500);
-
-  digitalWrite(Lmotor, HIGH);
-  digitalWrite(Rmotor, HIGH);
+  digitalWrite(MOTOR1_PIN1, HIGH);
+  digitalWrite(MOTOR1_PIN2, LOW);
+  digitalWrite(MOTOR2_PIN1, LOW);
+  digitalWrite(MOTOR2_PIN2, HIGH);
 }
