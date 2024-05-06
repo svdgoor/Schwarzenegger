@@ -3,11 +3,6 @@
 
 #define ir_right A2
 #define ir_left A3
-const float IRValueMin = 0;
-const float IRValueMax = 60; // TODO define this
-const float IRThreshold = -1; // TODO define this
-const float ServoControlMin = 0; // TODO define this
-const float ServoControlMax = 1; // TODO define this
 
 // Motor control
 const int MOTOR1_PIN1 = 3;  // Connect this to one terminal of Motor1
@@ -41,8 +36,8 @@ const int servoDirections = 15; // make sure servoTotalAngle/servoDirections is 
 const int servoDirectionMiddle = floor(servoDirections / 2);
 const int servoAngleStepSize = servoTotalAngle / servoDirections;
 const int servoChangeAngleDelay = 200;
-const int msToAuthenticateWhenInvestigating = 5000; // TODO: Test this & probably lower it when running the demonstration
-const int msUntilIdleWhenInvestigating = 20000; // TODO: Test this & probably lower it when running the demonstration
+const int msToAuthenticateWhenInvestigating = 5000;
+const int msUntilIdleWhenInvestigating = 20000;
 const bool servoSwivel = true; // if false, rotates
 int servoDirectionNumber = 0;
 HCSR04 sonar = HCSR04(trig_pin, echo_pin); // sensor function
@@ -223,7 +218,6 @@ void loop() {
     }
     case HOSTILE: { // Tom & Jen
       /// ACTION ///
-      // TODO Chasing -> then maintain distance to avoid getting smacked. Avoid obstacles where possible
       delay(50);
       unsigned int distance = sonar.dist();
       // Serial.print("distance");
@@ -234,13 +228,15 @@ void loop() {
       // Serial.println(Right_Value);
       // Serial.print("LEFT");
       // Serial.println(Left_Value);
-      String message = "Distance: ";
-      message = message + distance;
-      message = message + " RightIR: ";
-      message = message + Right_Value;
-      message = message + " LeftIR: ";
-      message = message + Left_Value;
-      printlnWithState(message);
+      if (debug) {
+        String message = "Distance: ";
+        message = message + distance;
+        message = message + " RightIR: ";
+        message = message + Right_Value;
+        message = message + " LeftIR: ";
+        message = message + Left_Value;
+        printlnWithState(message);
+      }
 
       // Check if object is detected within a certain distance and both sensors detect an object
       if (Right_Value == 1 && Left_Value == 1 && distance >= 10 && distance <= 30) {
