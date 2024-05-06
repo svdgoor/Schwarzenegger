@@ -140,15 +140,15 @@ void loop() {
         }
       } else { // rotate fully
         if (newServoDirectionNumber < 0) {
-          newServoDirectionNumber = servoDirections - 1;
+          newServoDirectionNumber = servoDirections - 1; // rotate around to end
         } else if (newServoDirectionNumber >= servoDirections) {
           newServoDirectionNumber = 0;
         }
       }
 
-      setServo(newServoDirectionNumber * servoAngleStepSize); // Set direction & wait; this updates servoDirection
+      // rotate and measure distance
+      setServo(newServoDirectionNumber * servoAngleStepSize); // Set direction; this updates servoDirection
       delay(servoChangeAngleDelay);
-
       float cDist = sonar.dist();
 
       if (debug) {
@@ -327,17 +327,42 @@ void updateRobotState(int state) {
   Serial.print("State switched from ");
   Serial.print(currentState);
   Serial.print(" to ");
-  Serial.println(state);
   currentState = state;
-  if (state == INVESTIGATING) {
-    investigatingStartTime = millis();
-  }
-  if (state == IDLE_) {
-    for (int i = 0; i < servoDirections; i++) {
-      sonarDistances[i] = 0;
+  updateRobotAppearance(state);
+  switch (state) {
+    case IDLE_: {
+      Serial.println("IDLE_");
+
+      // reset measurements
+      for (int i = 0; i < servoDirections; i++) {
+        sonarDistances[i] = 0;
+      }
+
+      // reset servo
+      setServo(0);
+      delay(servoChangeAngleDelay*2); // wait for servo to move
+      break;
+    }
+    case INVESTIGATING: {
+      Serial.println("INVESTIGATING");
+
+      // reset timer
+      investigatingStartTime = millis();
+      break;
+    }
+    case HOSTILE: {
+      Serial.println("HOSTILE");
+      break;
+    }
+    case FRIENDLY: {
+      Serial.println("FRIENDLY");
+      break;
+    }
+    default: {
+      Serial.println("UNKNOWN? ERROR?");
+      break;
     }
   }
-  updateRobotAppearance(state);
   return;
 }
 
