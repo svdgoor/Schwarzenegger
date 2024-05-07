@@ -9,16 +9,16 @@ const int MOTOR1_PIN1 = 3;  // Connect this to one terminal of Motor1
 const int MOTOR1_PIN2 = 4;  // Connect this to the other terminal of Motor1
 const int MOTOR2_PIN1 = 5;  // Connect this to one terminal of Motor2
 const int MOTOR2_PIN2 = 6;  // Connect this to the other terminal of Motor2
-const int msDelayPer360Turn = 500; // TODO: Test this
+const int msDelayPer360Turn = 1250; // Approximately.
 
 // LED and Buzzer 
-const int buzzer = 10;
-const int LEDorange = 7;
-const int LEDred = 8;
-const int LEDgreen = 9;
+const int buzzer = 10; //sound buzzer to make the robot drive
+const int LEDorange = 7; // scanning mode indicator
+const int LEDred = 8; // intruder mode indicator
+const int LEDgreen = 9;  // friendly mode indicator
 
 // Touch Sensor 
-const int touchSensor = 11;
+const int touchSensor = 11; 
 int touchCount = 0;
 bool wasTouched = false;
 unsigned long lastTouchTime = 0;
@@ -29,7 +29,7 @@ const unsigned long doubleTapWindow = 500; // user has x ms to triple touch
 #define servo_pin 2
 #define trig_pin A1
 #define echo_pin A0
-const int sonarMaxDistance = 250;
+const int sonarMaxDistance = 250; 
 const float distanceChangeThreshold = 0.7; // Based on testing, seems to be high enough to prevent accidental triggers with the innacuracy of the sensor
 const int servoTotalAngle = 180; // DO NOT CHANGE THIS IT WILL BREAK THE CHASING!
 const int servoDirections = 15; // make sure servoTotalAngle/servoDirections is a whole number, and that is an odd number
@@ -58,7 +58,7 @@ void printlnWithState(String message) {
 
 void setup() {
   Serial.begin(9600);
-  
+  // set IR sensors as input
   pinMode(ir_right, INPUT);
   pinMode(ir_left, INPUT);
 
@@ -102,7 +102,7 @@ void setup() {
   Serial.println(FRIENDLY);
 } 
 
-// and the in the void loop you can change state based on button pressed or timer runs out, like example
+// In the void loop you can change the state based on button pressed or timer runs out, like example
 // this is only an example since i dont know the intricate parts of the button press yet but
 void loop() {
   switch(currentState) {
@@ -239,7 +239,7 @@ void loop() {
       }
 
       // Check if object is detected within a certain distance and both sensors detect an object
-      if (Right_Value == 1 && Left_Value == 1 && distance >= 10 && distance <= 30) {
+      if (Right_Value == 1 && Left_Value == 1 && distance >= 10) {
         moveForward();
       } else if (Right_Value == 0 && Left_Value == 1) {
         turnR();
